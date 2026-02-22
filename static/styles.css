@@ -1,0 +1,11 @@
+.my-navbar {
+    background-color: #91049e;
+}
+
+.my-navbar .navbar-brand {
+    color: white;
+}
+
+.my-navbar .nav-link {
+    color: rgb(253, 210, 237);
+}
