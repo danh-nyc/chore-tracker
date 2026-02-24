@@ -19,11 +19,18 @@
         <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
-        <div class="navbar-nav">
-            <a class="nav-link active" aria-current="page" href="#">Home</a>
-            <a class="nav-link" href="#">Kids</a>
-            <a class="nav-link" href="#">Parents</a>
-        </div>
+            {% if session.get("user_id") %}
+                <div class="navbar-nav">
+                    <a class="nav-link active" aria-current="page" href="{{ url_for('index') }}">Home</a>
+                    <a class="nav-link" href="#">Dashboard</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                </div>
+            {% else %}
+                <div class="navbar-nav">
+                    <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+                    <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                </div>
+            {% endif %}
         </div>
     </div>
     </nav>
