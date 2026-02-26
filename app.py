@@ -1,4 +1,4 @@
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for, abort, g
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 
@@ -14,20 +14,39 @@ def get_db_connection():
     return conn
 
 def get_current_user():
+    if hasattr(g, "current_user"):
+        return g.current_user
+
     user_id = session.get("user_id")
     if not user_id:
+        g.current_user = None
         return None
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        return cursor.fetchone()
+        g.current_user = cursor.fetchone()
+        return g.current_user
+
+@app.context_processor
+def inject_user():
+    return {"current_user": get_current_user()}
+
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template("403.html"), 403
 
 @app.route("/")
 def index():
-    if not session.get("user_id"):
+    user = get_current_user()
+
+    if not user:
         return redirect(url_for("login"))
-    return render_template("index.html")
+
+    if user["role"] == "parent":
+        return redirect(url_for("parents"))
+
+    return redirect(url_for("kids"))
 
 @app.route("/register", methods=["GET","POST"])
 def register():
@@ -64,7 +83,7 @@ def register():
             session["user_id"] = new_id
 
         flash("Registered")
-        return redirect("/")
+        return redirect(url_for("index"))
 
     else:
         return render_template("register.html")        
@@ -76,7 +95,7 @@ def login():
 
         session.clear()
 
-        username = request.form.get("username")
+        username = (request.form.get("username") or "").strip()
         password = request.form.get("password")
 
         if not username:
@@ -97,10 +116,10 @@ def login():
             session["user_id"] = user["id"]
 
         flash("Logged in")
-        return redirect("/")
-    
-    return render_template("login.html")   
+        return redirect(url_for("index"))
 
+    return render_template("login.html")
+    
 
 @app.route("/create-kid", methods=["GET","POST"])
 def create_kid():
@@ -111,7 +130,7 @@ def create_kid():
         return redirect(url_for("login"))
 
     if parent["role"] != "parent":
-        return render_template("index.html", error="Unauthorized")
+        abort(403)
 
     if request.method == "POST":
 
@@ -142,17 +161,52 @@ def create_kid():
                    (username, generate_password_hash(password), 'kid', parent["id"]))
 
         flash("Kid created")
-        return redirect("/create-kid")
+        return redirect(url_for("create_kid"))
 
     return render_template("create-kid.html") 
+
+
+@app.route("/kids")
+def kids():
+
+    kid = get_current_user()
+
+    if not kid:
+        return redirect(url_for("login"))
+
+    if kid["role"] != "kid":
+        abort(403)
     
+    return render_template("kids.html", kid=kid)
+
+
+@app.route("/parents")
+def parents():
+
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+
+    if parent["role"] != "parent":
+        abort(403)
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # get kid list
+        cursor.execute("SELECT id, username FROM users WHERE role = 'kid' and parent_id = ?", (parent["id"],))
+        kids = cursor.fetchall()
+
+    return render_template("parents.html", parent=parent, kids=kids)
+
 
 @app.route("/logout")
 def logout():
 
     session.clear()
     flash("Logged out")
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":

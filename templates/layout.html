@@ -19,12 +19,19 @@
         <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
-            {% if session.get("user_id") %}
-                <div class="navbar-nav">
-                    <a class="nav-link active" aria-current="page" href="{{ url_for('index') }}">Home</a>
-                    <a class="nav-link" href="#">Dashboard</a>
-                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-                </div>
+            {% if current_user %}
+                {% if current_user["role"] == "parent" %}
+                    <div class="navbar-nav">
+                        <a class="nav-link active" aria-current="page" href="{{ url_for('parents') }}">Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('create_kid') }}">Add Kid</a>
+                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                    </div>
+                {% elif current_user["role"] == "kid" %}
+                    <div class="navbar-nav">
+                        <a class="nav-link active" aria-current="page" href="{{ url_for('kids') }}">Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                    </div>
+                {% endif %}
             {% else %}
                 <div class="navbar-nav">
                     <a class="nav-link" href="{{ url_for('register') }}">Register</a>

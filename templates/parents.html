@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block title %}Goody! | Parents Dashboard{% endblock %}
+
+{% block content %}
+
+    <div class="card">
+        <div class="card-body">
+            Welcome {{ parent.username }}
+        </div>
+    </div>
+
+    <ul class="list-group">
+        <li class="list-group-item">Kid 1</li>
+        <li class="list-group-item">Kid 2</li>
+        <li class="list-group-item">Kid 3</li>
+    </ul>
+
+    {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+    {% endif %}
+
+{% endblock %}
