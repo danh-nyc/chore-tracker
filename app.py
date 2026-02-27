@@ -1,6 +1,8 @@
 from flask import Flask, flash, redirect, render_template, request, session, url_for, abort, g
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
+import secrets
+import string
 
 
 app = Flask(__name__)
@@ -28,6 +30,26 @@ def get_current_user():
         g.current_user = cursor.fetchone()
         return g.current_user
 
+def generate_invite_code(conn, length=10, max_attempts=10):
+    """
+    Generate a UNIQUE invite code.
+    Retries if collision occurs.
+    Raises RuntimeError if unable after max_attempts.
+    """
+
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    cursor = conn.cursor()
+
+    for _ in range(max_attempts):
+        code = ''.join(secrets.choice(alphabet) for _ in range(length))
+
+        cursor.execute("SELECT * FROM households WHERE invite_code = ?", (code,))
+
+        if not cursor.fetchone():
+            return code
+
+    raise RuntimeError("Unable to generate unique invite code")
+
 @app.context_processor
 def inject_user():
     return {"current_user": get_current_user()}
@@ -43,13 +65,19 @@ def index():
     if not user:
         return redirect(url_for("login"))
 
-    if user["role"] == "parent":
+    if user["role"] == "parent" and not user["household_id"]:
+        return redirect(url_for("households"))
+    
+    if user["role"] == "parent" and user["household_id"]:
         return redirect(url_for("parents"))
 
     return redirect(url_for("kids"))
 
 @app.route("/register", methods=["GET","POST"])
 def register():
+
+    if get_current_user():
+        return redirect(url_for("index"))
 
     if request.method == "POST":
 
@@ -82,11 +110,64 @@ def register():
             new_id = cursor.lastrowid
             session["user_id"] = new_id
 
-        flash("Registered")
-        return redirect(url_for("index"))
+        return redirect(url_for("households"))
 
     else:
-        return render_template("register.html")        
+        return render_template("register.html")     
+
+@app.route("/households", methods=["GET","POST"])   
+def households():
+
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+
+    if parent["role"] != "parent":
+        abort(403)
+
+    if parent["household_id"]:
+        return redirect(url_for("parents"))
+
+    if request.method == "POST":
+
+        household = (request.form.get("household") or "").strip()
+        invitecode = (request.form.get("invitecode") or "").strip().upper()
+
+        if household and invitecode:
+            return render_template("households.html", error="Cannot create a household and join a household")
+
+        elif household:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                # insert household
+                cursor.execute("INSERT INTO households (name, invite_code, created_by) VALUES(?, ?, ?)",
+                    (household, generate_invite_code(conn), parent["id"]))
+                
+                new_household_id = cursor.lastrowid
+
+                cursor.execute("UPDATE users SET household_id=? WHERE id=?", (new_household_id, parent["id"]))
+        
+        elif invitecode:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+
+                    # check exists
+                    cursor.execute("SELECT * FROM households WHERE invite_code = ?", (invitecode,))
+                    existing_household = cursor.fetchone()
+                    if not existing_household:
+                        return render_template("households.html", error="Invite code not found")
+                
+                    # update parents household
+                    cursor.execute("UPDATE users SET household_id = ? WHERE id = ?", (existing_household["id"], parent["id"]))
+
+        else:
+            return render_template("households.html", error="Enter a household name or an invite code")
+        
+        return redirect(url_for("parents"))
+
+    return render_template("households.html")  
 
 @app.route("/login", methods=["GET","POST"])
 def login():
@@ -132,6 +213,9 @@ def create_kid():
     if parent["role"] != "parent":
         abort(403)
 
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
     if request.method == "POST":
 
         username = (request.form.get("username") or "").strip()
@@ -157,8 +241,8 @@ def create_kid():
                 return render_template("create-kid.html", error="Username already exists")
         
             # insert if needed
-            cursor.execute("INSERT INTO users (username, password_hash, role, parent_id) VALUES(?, ?, ?, ?)",
-                   (username, generate_password_hash(password), 'kid', parent["id"]))
+            cursor.execute("INSERT INTO users (username, password_hash, role, household_id) VALUES(?, ?, ?, ?)",
+                   (username, generate_password_hash(password), 'kid', parent["household_id"]))
 
         flash("Kid created")
         return redirect(url_for("create_kid"))
@@ -191,11 +275,14 @@ def parents():
     if parent["role"] != "parent":
         abort(403)
 
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
         # get kid list
-        cursor.execute("SELECT id, username FROM users WHERE role = 'kid' and parent_id = ?", (parent["id"],))
+        cursor.execute("SELECT id, username FROM users WHERE role = 'kid' and household_id = ?", (parent["household_id"],))
         kids = cursor.fetchall()
 
     return render_template("parents.html", parent=parent, kids=kids)

@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+
+{% block title %}Goody! | Household Setup{% endblock %}
+
+{% block content %}
+    <form method="post">
+        <div class="mb-3">
+            <label for="username" class="form-label">Create Household</label>
+            <input class="form-control" id="household" name="household" placeholder="username" type="text">
+        </div>
+        <div class="mb-3">
+            <label for="password" class="form-label">Join Household</label>
+            <input class="form-control" id="invitecode" name="invitecode" placeholder="Invite code" type="text">
+        </div>
+        <div>
+            <button class="btn btn-primary" type="submit">Submit</button>
+        </div>
+    </form>
+
+    {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+    {% endif %}
+
+{% endblock %}
