@@ -287,6 +287,251 @@ def parents():
 
     return render_template("parents.html", parent=parent, kids=kids)
 
+@app.route("/parents/chores", methods=["GET", "POST"])
+def parents_chores():
+
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+    
+    if parent["role"] != "parent":
+        abort(403)
+
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # get chore list
+        cursor.execute("SELECT id, title, points, active FROM chore_templates WHERE household_id = ? ORDER BY active DESC, title", (parent["household_id"],))
+        chores = cursor.fetchall()
+    
+        if request.method == "POST":
+
+            choretitle = (request.form.get("choretitle") or "").strip()
+            chorepoints = request.form.get("chorepoints")
+
+            if not choretitle:
+                return render_template("parent-chores.html", chores=chores, error="Missing chore title")
+            
+            if not chorepoints:
+                return render_template("parent-chores.html", chores=chores, error="Missing chore points")
+            
+            try:
+                points_chk = int(chorepoints)
+            except (TypeError, ValueError):
+                return render_template("parent-chores.html", chores=chores, error="Points must be a positive integer")
+            
+            if points_chk < 1:
+                return render_template("parent-chores.html", chores=chores, error="Points must be a positive integer")
+
+            # check if chore already exists
+            cursor.execute("SELECT * FROM chore_templates WHERE household_id = ? AND title = ?", (parent["household_id"], choretitle))
+            existing_chore = cursor.fetchone()
+            if existing_chore:
+                return render_template("parent-chores.html", chores=chores, error="Chore title already exists")
+            
+            # insert new chore template
+            cursor.execute("INSERT INTO chore_templates (household_id, title, points, active, created_by) VALUES (?, ? ,?, ?, ?)",
+                (parent["household_id"], choretitle, points_chk, 'Y', parent["id"]))
+                
+            flash("Chore created", "success")
+            return redirect(url_for("parents_chores"))
+
+    return render_template("parent-chores.html", chores=chores)
+
+@app.route("/parents/chores/<int:chore_id>/toggle", methods=["POST"])
+def toggle_chore(chore_id):
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+
+    if parent["role"] != "parent":
+        abort(403)
+
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE chore_templates
+            SET active = CASE active WHEN 'Y' THEN 'N' ELSE 'Y' END
+            WHERE id = ?
+            AND household_id = ?
+        """, (chore_id, parent["household_id"]))
+
+        if cursor.rowcount != 1:
+            abort(403)
+
+    flash("Chore updated", "success")
+    return redirect(url_for("parents_chores"))
+
+@app.route("/kids/chores", methods=["GET"])
+def kids_chores():
+    kid = get_current_user()
+
+    if not kid:
+        return redirect(url_for("login"))
+
+    if kid["role"] != "kid":
+        abort(403)
+
+    if not kid["household_id"]:
+        return redirect(url_for("login"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Active templates for this household
+        cursor.execute("SELECT id, title, points FROM chore_templates WHERE household_id = ? AND active = 'Y' ORDER BY title", (kid["household_id"],))
+        templates = cursor.fetchall()
+
+        # Recent submissions for this kid
+        cursor.execute("""
+            SELECT s.id, t.title, s.status, s.note, s.points_earned, s.submitted_on, s.reviewed_on
+            FROM chore_submissions s
+            JOIN chore_templates t ON t.id = s.template_id
+            WHERE s.kid_id = ?
+            ORDER BY s.submitted_on DESC
+            LIMIT 25
+        """, (kid["id"],))
+        submissions = cursor.fetchall()
+
+    return render_template("kids-chores.html", templates=templates, submissions=submissions)
+
+
+@app.route("/kids/chores/submit", methods=["POST"])
+def submit_chore():
+    kid = get_current_user()
+
+    if not kid:
+        return redirect(url_for("login"))
+
+    if kid["role"] != "kid":
+        abort(403)
+
+    if not kid["household_id"]:
+        return redirect(url_for("login"))
+
+    template_id = request.form.get("template_id")
+    note = (request.form.get("note") or "").strip()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Security check: template must belong to kid household and be active
+        cursor.execute("""
+            SELECT 1
+            FROM chore_templates
+            WHERE id = ? AND household_id = ? AND active = 'Y'
+        """, (template_id, kid["household_id"]))
+
+        if not cursor.fetchone():
+            abort(403)
+
+        cursor.execute("""
+            INSERT INTO chore_submissions (template_id, kid_id, status, note, points_earned, submitted_on)
+            VALUES (?, ?, 'submitted', ?, NULL, CURRENT_TIMESTAMP)
+        """, (template_id, kid["id"], note))
+
+    flash("Chore submitted!", "success")
+    return redirect(url_for("kids_chores"))
+
+
+@app.route("/parents/submissions", methods=["GET"])
+def parent_submissions():
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+    
+    if parent["role"] != "parent":
+        abort(403)
+
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT s.id, s.note, s.submitted_on,
+                   k.username AS kid_username,
+                   t.title AS chore_title,
+                   t.points AS template_points
+            FROM chore_submissions s
+            JOIN chore_templates t ON t.id = s.template_id
+            JOIN users k ON k.id = s.kid_id
+            WHERE t.household_id = ?
+              AND s.status = 'submitted'
+            ORDER BY s.submitted_on ASC
+        """, (parent["household_id"],))
+        pending = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT s.id, s.status, s.note, s.points_earned, s.submitted_on, s.reviewed_on,
+                   k.username AS kid_username,
+                   t.title AS chore_title
+            FROM chore_submissions s
+            JOIN chore_templates t ON t.id = s.template_id
+            JOIN users k ON k.id = s.kid_id
+            WHERE t.household_id = ?
+              AND s.status IN ('approved','denied')
+            ORDER BY s.reviewed_on DESC
+            LIMIT 25
+        """, (parent["household_id"],))
+        reviewed = cursor.fetchall()
+
+    return render_template("parents-submissions.html", pending=pending, reviewed=reviewed)
+
+
+@app.route("/parents/submissions/<int:submission_id>/review", methods=["POST"])
+def review_submission(submission_id):
+
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+    
+    if parent["role"] != "parent":
+        abort(403)
+
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
+    decision = (request.form.get("decision") or "").strip().lower()
+    if decision not in ("approved", "denied"):
+        abort(403)
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE chore_submissions
+            SET status = ?,
+                points_earned = CASE
+                    WHEN ? = 'approved' THEN (SELECT points FROM chore_templates WHERE id = chore_submissions.template_id)
+                    ELSE 0
+                END,
+                reviewed_by = ?,
+                reviewed_on = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND status = 'submitted'
+              AND template_id IN (
+                  SELECT id FROM chore_templates WHERE household_id = ?
+              )
+        """, (decision, decision, parent["id"], submission_id, parent["household_id"]))
+
+        if cursor.rowcount != 1:
+            abort(403)
+
+    flash(f"Submission {decision}.", "success")
+    return redirect(url_for("parent_submissions"))
 
 @app.route("/logout")
 def logout():

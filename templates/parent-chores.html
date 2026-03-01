@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+
+{% block title %}Goody! | Manage Chores{% endblock %}
+
+{% block content %}
+    <form method="post">
+        <div class="mb-3">
+            <label for="choretitle" class="form-label">Chore Title</label>
+            <input class="form-control" id="choretitle" name="choretitle" type="text">
+        </div>
+        <div class="mb-3">
+            <label for="chorepoints" class="form-label">Points</label>
+            <input class="form-control" id="chorepoints" name="chorepoints" placeholder="1" type="number" min="1">
+        </div>
+        <div>
+            <button class="btn btn-primary" type="submit">Create</button>
+        </div>
+    </form>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th class="text-start">Chore</th>
+                <th class="text-end">Points</th>
+                <th class="text-center">Status</th>
+                <th class="text-end">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+                {% for chore in chores %}
+                <tr>
+                    <td class="text-start">{{  chore.title  }}</td>
+                    <td class="text-end">{{  chore.points  }}</td>
+
+                    <td class="text-center">
+                        {% if chore.active == 'Y' %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-end">
+                        <form method="post" action="{{ url_for('toggle_chore', chore_id=chore.id) }}">
+                            <button class="btn btn-sm {% if chore.active == 'Y' %}btn-warning{% else %}btn-success{% endif %}" type="submit">
+                                {% if chore.active == 'Y' %}
+                                    Deactivate
+                                {% else %}
+                                    Activate
+                                {% endif %}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+        </tbody>
+    </table>
+
+    {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+    {% endif %}
+
+{% endblock %}

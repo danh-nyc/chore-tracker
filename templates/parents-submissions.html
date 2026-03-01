@@ -1,0 +1,87 @@
+{% extends "layout.html" %}
+{% block title %}Goody! | Review Submissions{% endblock %}
+
+{% block content %}
+
+<h3 class="mb-3">Pending Submissions</h3>
+
+{% if pending|length == 0 %}
+  <div class="alert alert-info">No pending submissions.</div>
+{% else %}
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Kid</th>
+          <th>Chore</th>
+          <th>Note</th>
+          <th class="text-end">Points</th>
+          <th class="text-end">Submitted</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in pending %}
+        <tr>
+          <td>{{ s.kid_username }}</td>
+          <td>{{ s.chore_title }}</td>
+          <td>{{ s.note or "" }}</td>
+          <td class="text-end">{{ s.template_points }}</td>
+          <td class="text-end">{{ s.submitted_on }}</td>
+          <td class="text-end">
+            <form class="d-inline" method="post" action="{{ url_for('review_submission', submission_id=s.id) }}">
+              <input type="hidden" name="decision" value="approved">
+              <button class="btn btn-sm btn-success" type="submit">Approve</button>
+            </form>
+            <form class="d-inline ms-1" method="post" action="{{ url_for('review_submission', submission_id=s.id) }}">
+              <input type="hidden" name="decision" value="denied">
+              <button class="btn btn-sm btn-danger" type="submit">Deny</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+<hr class="my-4">
+
+<h3 class="mb-3">Recently Reviewed</h3>
+
+{% if reviewed|length == 0 %}
+  <div class="alert alert-secondary">No reviewed submissions yet.</div>
+{% else %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Kid</th>
+          <th>Chore</th>
+          <th>Status</th>
+          <th class="text-end">Points</th>
+          <th class="text-end">Reviewed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in reviewed %}
+        <tr>
+          <td>{{ s.kid_username }}</td>
+          <td>{{ s.chore_title }}</td>
+          <td>
+            {% if s.status == 'approved' %}
+              <span class="badge bg-success">Approved</span>
+            {% else %}
+              <span class="badge bg-danger">Denied</span>
+            {% endif %}
+          </td>
+          <td class="text-end">{{ s.points_earned }}</td>
+          <td class="text-end">{{ s.reviewed_on }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% endblock %}

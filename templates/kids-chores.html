@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+
+{% block title %}Goody! | My Chores{% endblock %}
+
+{% block content %}
+
+<h3 class="mb-3">Available Chores</h3>
+
+{% if templates|length == 0 %}
+  <div class="alert alert-info">No active chores yet. Ask a parent to add some!</div>
+{% else %}
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Chore</th>
+          <th class="text-end">Points</th>
+          <th style="width: 40%">Note (optional)</th>
+          <th class="text-end">Submit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+        <tr>
+          <td>{{ t.title }}</td>
+          <td class="text-end">{{ t.points }}</td>
+          <td>
+            <form class="d-flex gap-2" method="post" action="{{ url_for('submit_chore') }}">
+              <input type="hidden" name="template_id" value="{{ t.id }}">
+              <input class="form-control" type="text" name="note" placeholder="e.g., cleaned room, took out trash">
+          </td>
+          <td class="text-end">
+              <button class="btn btn-primary btn-sm" type="submit">Submit</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+<hr class="my-4">
+
+<h3 class="mb-3">My Recent Submissions</h3>
+
+{% if submissions|length == 0 %}
+  <div class="alert alert-secondary">No submissions yet.</div>
+{% else %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Chore</th>
+          <th>Status</th>
+          <th>Note</th>
+          <th class="text-end">Points</th>
+          <th class="text-end">Submitted</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in submissions %}
+        <tr>
+          <td>{{ s.title }}</td>
+          <td>
+            {% if s.status == 'submitted' %}
+              <span class="badge bg-warning text-dark">Submitted</span>
+            {% elif s.status == 'approved' %}
+              <span class="badge bg-success">Approved</span>
+            {% else %}
+              <span class="badge bg-danger">Denied</span>
+            {% endif %}
+          </td>
+          <td>{{ s.note or "" }}</td>
+          <td class="text-end">{{ s.points_earned if s.points_earned is not none else "-" }}</td>
+          <td class="text-end">{{ s.submitted_on }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% endblock %}
