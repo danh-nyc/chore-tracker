@@ -1,25 +1,140 @@
 {% extends "layout.html" %}
 
-{% block title %}Goody! | Kids Dashboard{% endblock %}
+{% block title %}Kid Dashboard - Goody!{% endblock %}
 
 {% block content %}
 
-    <div class="card">
-        <div class="card-body">
-            Welcome {{ kid.username }}
-        </div>
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">Kid Dashboard</h1>
+  <div class="text-muted small">
+    Hi, <span class="fw-semibold">{{ kid.username }}</span> 👋
+  </div>
+</div>
+
+<!-- Points hero -->
+<div class="card kid-hero border-0 shadow-sm mb-4">
+  <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+    <div>
+      <div class="text-white-50">Your points</div>
+      <div class="display-4 text-white mb-1">{{ available_points }}</div>
+      <div class="text-white-50 small">Earn points by doing chores. Spend them on prizes!</div>
     </div>
 
-    <ul class="list-group">
-        <li class="list-group-item">Chore 1</li>
-        <li class="list-group-item">Chore 2</li>
-        <li class="list-group-item">Chore 3</li>
-    </ul>
+    <div class="d-grid gap-2 d-md-flex mt-3 mt-md-0">
+      <a class="btn btn-light" href="{{ url_for('kids_chores') }}">Do a Chore</a>
+      <a class="btn btn-outline-light" href="{{ url_for('kids_prizes') }}">Get a Prize</a>
+    </div>
+  </div>
+</div>
 
-    {% if error %}
-        <div class="alert alert-danger">
-            {{ error }}
+<!-- Quick tiles -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <a class="card action-tile border-0 shadow-sm text-decoration-none h-100" href="{{ url_for('kids_chores') }}">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="h5 mb-1 text-dark">Chores</div>
+          <div class="text-muted small">Submit completed chores</div>
         </div>
+        <span class="badge text-bg-secondary">Go</span>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-6">
+    <a class="card action-tile border-0 shadow-sm text-decoration-none h-100" href="{{ url_for('kids_prizes') }}">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="h5 mb-1 text-dark">Prizes</div>
+          <div class="text-muted small">Request rewards</div>
+        </div>
+        <span class="badge text-bg-secondary">Go</span>
+      </div>
+    </a>
+  </div>
+</div>
+
+<!-- Available items -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span>Available chores</span>
+        <a class="small" href="{{ url_for('kids_chores') }}">View all</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for c in available_chores %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ c.title }}</span>
+          <span class="badge text-bg-secondary">{{ c.points }} pts</span>
+        </li>
+        {% endfor %}
+        {% if available_chores|length == 0 %}
+        <li class="list-group-item text-muted">No chores available right now.</li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span>Available prizes</span>
+        <a class="small" href="{{ url_for('kids_prizes') }}">View all</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for p in available_prizes %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ p.title }}</span>
+          <span class="badge text-bg-secondary">{{ p.points_cost }} pts</span>
+        </li>
+        {% endfor %}
+        {% if available_prizes|length == 0 %}
+        <li class="list-group-item text-muted">No prizes available right now.</li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Recent activity (simple feed style) -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white">Recent activity</div>
+  <div class="list-group list-group-flush">
+
+    {% for s in recent_submissions %}
+      <div class="list-group-item d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-semibold">Chore: {{ s.title }}</div>
+          <div class="text-muted small">{{ s.submitted_on }}</div>
+        </div>
+        <div class="text-end">
+          <span class="badge text-bg-light">{{ s.status }}</span>
+          <div class="text-muted small">
+            {% if s.points_earned is not none %}+{{ s.points_earned }} pts{% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+
+    {% for r in recent_requests %}
+      <div class="list-group-item d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-semibold">Prize: {{ r.title }}</div>
+          <div class="text-muted small">{{ r.requested_on }}</div>
+        </div>
+        <div class="text-end">
+          <span class="badge text-bg-light">{{ r.status }}</span>
+          <div class="text-muted small">-{{ r.points_cost }} pts</div>
+        </div>
+      </div>
+    {% endfor %}
+
+    {% if recent_submissions|length == 0 and recent_requests|length == 0 %}
+      <div class="list-group-item text-muted">No activity yet. Try submitting a chore!</div>
     {% endif %}
+
+  </div>
+</div>
 
 {% endblock %}

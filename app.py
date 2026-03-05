@@ -271,7 +271,6 @@ def create_kid():
 
 @app.route("/kids")
 def kids():
-
     kid = get_current_user()
 
     if not kid:
@@ -279,13 +278,72 @@ def kids():
 
     if kid["role"] != "kid":
         abort(403)
-    
-    return render_template("kids.html", kid=kid)
+
+    if not kid["household_id"]:
+        return redirect(url_for("login"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Points balance (use your helper)
+        available_points = get_available_points(conn, kid["id"])
+
+        # Available chores (active)
+        cursor.execute("""
+            SELECT id, title, points
+            FROM chore_templates
+            WHERE household_id = ?
+              AND active = 'Y'
+            ORDER BY title
+            LIMIT 6
+        """, (kid["household_id"],))
+        available_chores = cursor.fetchall()
+
+        # Available prizes (active)
+        cursor.execute("""
+            SELECT id, title, points_cost
+            FROM prize_templates
+            WHERE household_id = ?
+              AND active = 'Y'
+            ORDER BY points_cost, title
+            LIMIT 6
+        """, (kid["household_id"],))
+        available_prizes = cursor.fetchall()
+
+        # Recent activity (two simple lists)
+        cursor.execute("""
+            SELECT s.id, t.title, s.status, s.points_earned, s.submitted_on
+            FROM chore_submissions s
+            JOIN chore_templates t ON t.id = s.template_id
+            WHERE s.kid_id = ?
+            ORDER BY s.submitted_on DESC
+            LIMIT 5
+        """, (kid["id"],))
+        recent_submissions = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT r.id, t.title, r.status, r.points_cost, r.requested_on
+            FROM prize_requests r
+            JOIN prize_templates t ON t.id = r.template_id
+            WHERE r.kid_id = ?
+            ORDER BY r.requested_on DESC
+            LIMIT 5
+        """, (kid["id"],))
+        recent_requests = cursor.fetchall()
+
+    return render_template(
+        "kids.html",
+        kid=kid,
+        available_points=available_points,
+        available_chores=available_chores,
+        available_prizes=available_prizes,
+        recent_submissions=recent_submissions,
+        recent_requests=recent_requests
+    )
 
 
 @app.route("/parents")
 def parents():
-
     parent = get_current_user()
 
     if not parent:
@@ -300,11 +358,58 @@ def parents():
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # get kid list
-        cursor.execute("SELECT id, username FROM users WHERE role = 'kid' and household_id = ?", (parent["household_id"],))
+        # Kids + computed points (single query; avoids looping get_available_points)
+        cursor.execute("""
+            SELECT
+              u.id AS kid_id,
+              u.username AS kid_username,
+              (
+                COALESCE((
+                  SELECT SUM(cs.points_earned)
+                  FROM chore_submissions cs
+                  WHERE cs.kid_id = u.id AND cs.status = 'approved'
+                ), 0)
+                -
+                COALESCE((
+                  SELECT SUM(pr.points_cost)
+                  FROM prize_requests pr
+                  WHERE pr.kid_id = u.id AND pr.status IN ('approved','fulfilled')
+                ), 0)
+              ) AS points_balance
+            FROM users u
+            WHERE u.role = 'kid'
+              AND u.household_id = ?
+            ORDER BY u.username
+        """, (parent["household_id"],))
         kids = cursor.fetchall()
 
-    return render_template("parents.html", parent=parent, kids=kids)
+        # Pending chore submissions (household-scoped via chore_templates)
+        cursor.execute("""
+            SELECT COUNT(*) AS c
+            FROM chore_submissions s
+            JOIN chore_templates t ON t.id = s.template_id
+            WHERE t.household_id = ?
+              AND s.status = 'submitted'
+        """, (parent["household_id"],))
+        pending_submissions = cursor.fetchone()["c"]
+
+        # Pending prize requests (requested only)
+        cursor.execute("""
+            SELECT COUNT(*) AS c
+            FROM prize_requests r
+            JOIN prize_templates t ON t.id = r.template_id
+            WHERE t.household_id = ?
+              AND r.status = 'requested'
+        """, (parent["household_id"],))
+        pending_requests = cursor.fetchone()["c"]
+
+    return render_template(
+        "parents.html",
+        parent=parent,
+        kids=kids,
+        pending_submissions=pending_submissions,
+        pending_requests=pending_requests
+    )
 
 @app.route("/parents/chores", methods=["GET", "POST"])
 def parents_chores():

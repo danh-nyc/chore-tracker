@@ -2,10 +2,67 @@
     background-color: #91049e;
 }
 
+/* Brand */
 .my-navbar .navbar-brand {
+    color: white;
+    font-weight: 600;
+}
+
+.my-navbar .navbar-brand:hover {
     color: white;
 }
 
+/* Normal nav links */
 .my-navbar .nav-link {
     color: rgb(253, 210, 237);
+    font-weight: 500;
+}
+
+/* Hover state */
+.my-navbar .nav-link:hover {
+    color: white;
+}
+
+/* Active nav item */
+.my-navbar .nav-link.active {
+    color: white;
+    font-weight: 600;
+    border-bottom: 2px solid white;
+}
+
+/* Dashboard cards */
+.card {
+    border-radius: 10px;
+}
+
+/* Slightly nicer badges */
+.badge {
+    font-weight: 500;
+}
+
+/* Make primary buttons match brand */
+.btn-primary {
+    background-color: #91049e;
+    border-color: #91049e;
+}
+
+.btn-primary:hover {
+    background-color: #7b0385;
+    border-color: #7b0385;
+}
+
+.display-6 {
+    font-weight: 600;
+}
+
+/* Kid dashboard hero card */
+.kid-hero {
+    background: linear-gradient(135deg, #91049e, #c012b7);
+    border-radius: 12px;
+}
+
+/* Make the action tiles feel clickable */
+.action-tile:hover {
+    transform: translateY(-1px);
+    transition: transform 0.12s ease-in-out;
 }
