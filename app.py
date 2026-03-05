@@ -50,6 +50,25 @@ def generate_invite_code(conn, length=10, max_attempts=10):
 
     raise RuntimeError("Unable to generate unique invite code")
 
+def get_available_points(conn, kid_id):
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT COALESCE(SUM(points_earned), 0) AS earned
+        FROM chore_submissions
+        WHERE kid_id = ? AND status = 'approved'
+    """, (kid_id,))
+    earned = cursor.fetchone()["earned"]
+
+    cursor.execute("""
+        SELECT COALESCE(SUM(points_cost), 0) AS spent
+        FROM prize_requests
+        WHERE kid_id = ? AND status IN ('approved','fulfilled')
+    """, (kid_id,))
+    spent = cursor.fetchone()["spent"]
+
+    return int(earned) - int(spent)
+
 @app.context_processor
 def inject_user():
     return {"current_user": get_current_user()}
@@ -532,6 +551,284 @@ def review_submission(submission_id):
 
     flash(f"Submission {decision}.", "success")
     return redirect(url_for("parent_submissions"))
+
+@app.route("/parents/prizes", methods=["GET", "POST"])
+def parents_prizes():
+
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+    
+    if parent["role"] != "parent":
+        abort(403)
+
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # get prize list
+        cursor.execute("SELECT id, title, points_cost, active FROM prize_templates WHERE household_id = ? ORDER BY active DESC, title", (parent["household_id"],))
+        prizes = cursor.fetchall()
+    
+        if request.method == "POST":
+
+            prizetitle = (request.form.get("prizetitle") or "").strip()
+            prizepoints = request.form.get("prizepoints")
+
+            if not prizetitle:
+                return render_template("parent-prizes.html", prizes=prizes, error="Missing chore title")
+            
+            if not prizepoints:
+                return render_template("parent-prizes.html", prizes=prizes, error="Missing chore points")
+            
+            try:
+                points_chk = int(prizepoints)
+            except (TypeError, ValueError):
+                return render_template("parent-prizes.html", prizes=prizes, error="Points must be a positive integer")
+            
+            if points_chk < 1:
+                return render_template("parent-prizes.html", prizes=prizes, error="Points must be a positive integer")
+
+            # check if chore already exists
+            cursor.execute("SELECT * FROM prize_templates WHERE household_id = ? AND title = ?", (parent["household_id"], prizetitle))
+            existing_prize = cursor.fetchone()
+            if existing_prize:
+                return render_template("parent-prizes.html", prizes=prizes, error="Chore title already exists")
+            
+            # insert new chore template
+            cursor.execute("INSERT INTO prize_templates (household_id, title, points_cost, active, created_by) VALUES (?, ? ,?, ?, ?)",
+                (parent["household_id"], prizetitle, points_chk, 'Y', parent["id"]))
+                
+            flash("Prize created", "success")
+            return redirect(url_for("parents_prizes"))
+
+    return render_template("parent-prizes.html", prizes=prizes)
+
+@app.route("/parents/prizes/<int:prize_id>/toggle", methods=["POST"])
+def toggle_prize(prize_id):
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+
+    if parent["role"] != "parent":
+        abort(403)
+
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE prize_templates
+            SET active = CASE active WHEN 'Y' THEN 'N' ELSE 'Y' END
+            WHERE id = ?
+            AND household_id = ?
+        """, (prize_id, parent["household_id"]))
+
+        if cursor.rowcount != 1:
+            abort(403)
+
+    flash("Prize updated", "success")
+    return redirect(url_for("parents_prizes"))
+
+@app.route("/kids/prizes", methods=["GET"])
+def kids_prizes():
+    kid = get_current_user()
+
+    if not kid:
+        return redirect(url_for("login"))
+
+    if kid["role"] != "kid":
+        abort(403)
+
+    if not kid["household_id"]:
+        return redirect(url_for("login"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Active templates for this household
+        cursor.execute("SELECT id, title, points_cost FROM prize_templates WHERE household_id = ? AND active = 'Y' ORDER BY title", (kid["household_id"],))
+        templates = cursor.fetchall()
+
+        available = get_available_points(conn, kid["id"])  
+
+        # Recent submissions for this kid
+        cursor.execute("""
+            SELECT s.id, t.title, s.status, s.note, s.points_cost, s.requested_on, s.reviewed_on, s.fulfilled_on
+            FROM prize_requests s
+            JOIN prize_templates t ON t.id = s.template_id
+            WHERE s.kid_id = ?
+            ORDER BY s.requested_on DESC
+            LIMIT 25
+        """, (kid["id"],))
+        submissions = cursor.fetchall()
+
+    return render_template("kids-prizes.html", templates=templates, available=available, submissions=submissions)
+
+
+@app.route("/kids/prizes/submit", methods=["POST"])
+def submit_prize():
+    kid = get_current_user()
+
+    if not kid:
+        return redirect(url_for("login"))
+
+    if kid["role"] != "kid":
+        abort(403)
+
+    if not kid["household_id"]:
+        return redirect(url_for("login"))
+
+    template_id = request.form.get("template_id")
+    note = (request.form.get("note") or "").strip()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT points_cost FROM prize_templates WHERE id = ? AND household_id = ? AND active = 'Y'", (template_id, kid["household_id"]))
+        row = cursor.fetchone()
+        if not row:
+            abort(403)
+
+        points_cost = row["points_cost"]
+
+        available = get_available_points(conn, kid["id"])
+        if available < points_cost:
+            flash("Not enough points", "danger")
+            return redirect(url_for("kids_prizes"))
+
+        cursor.execute("""
+            INSERT INTO prize_requests (template_id, kid_id, status, note, points_cost, requested_on)
+            VALUES (?, ?, 'requested', ?, ?, CURRENT_TIMESTAMP)
+        """, (template_id, kid["id"], note, points_cost))
+
+    flash("Prize submitted!", "success")
+    return redirect(url_for("kids_prizes"))
+
+
+@app.route("/parents/requests", methods=["GET"])
+def parent_requests():
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+    
+    if parent["role"] != "parent":
+        abort(403)
+
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT s.id, s.status, s.note, s.points_cost, s.requested_on, s.reviewed_on, s.fulfilled_on,
+                k.username AS kid_username,
+                t.title AS prize_title
+            FROM prize_requests s
+            JOIN prize_templates t ON t.id = s.template_id
+            JOIN users k ON k.id = s.kid_id
+            WHERE t.household_id = ?
+            AND s.status IN ('requested','approved')
+            ORDER BY
+            CASE s.status WHEN 'requested' THEN 0 ELSE 1 END,
+            s.requested_on ASC
+        """, (parent["household_id"],))
+        pending = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT s.id, s.status, s.note, s.points_cost, s.requested_on, s.reviewed_on, s.fulfilled_on,
+                k.username AS kid_username,
+                t.title AS prize_title
+            FROM prize_requests s
+            JOIN prize_templates t ON t.id = s.template_id
+            JOIN users k ON k.id = s.kid_id
+            WHERE t.household_id = ?
+            AND s.status IN ('denied','fulfilled')
+            ORDER BY
+            COALESCE(s.fulfilled_on, s.reviewed_on) DESC
+            LIMIT 25
+        """, (parent["household_id"],))
+        reviewed = cursor.fetchall()
+
+    return render_template("parents-requests.html", pending=pending, reviewed=reviewed)
+
+
+@app.route("/parents/requests/<int:request_id>/review", methods=["POST"])
+def review_requests(request_id):
+
+    parent = get_current_user()
+
+    if not parent:
+        return redirect(url_for("login"))
+    
+    if parent["role"] != "parent":
+        abort(403)
+
+    if not parent["household_id"]:
+        return redirect(url_for("households"))
+
+    decision = (request.form.get("decision") or "").strip().lower()
+    if decision not in ("approved", "denied", "fulfilled"):
+        abort(400)
+
+    with get_db_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        cursor = conn.cursor()
+
+        if decision in ("approved", "denied"):
+            # Load the pending request to check points before approval
+            cursor.execute("""
+                SELECT r.id, r.kid_id, r.points_cost
+                FROM prize_requests r
+                JOIN prize_templates t ON t.id = r.template_id
+                WHERE r.id = ?
+                  AND r.status = 'requested'
+                  AND t.household_id = ?
+            """, (request_id, parent["household_id"]))
+            req = cursor.fetchone()
+            if not req:
+                abort(403)
+
+            if decision == "approved":
+                available = get_available_points(conn, req["kid_id"])
+                if available < req["points_cost"]:
+                    flash("Not enough points to approve this request.", "danger")
+                    return redirect(url_for("parent_requests"))
+
+            cursor.execute("""
+                UPDATE prize_requests
+                SET status = ?,
+                    reviewed_by = ?,
+                    reviewed_on = CURRENT_TIMESTAMP
+                WHERE id = ?
+                  AND status = 'requested'
+            """, (decision, parent["id"], request_id))
+
+        elif decision == "fulfilled":
+            cursor.execute("""
+                UPDATE prize_requests
+                SET status = 'fulfilled',
+                    fulfilled_on = CURRENT_TIMESTAMP
+                WHERE id = ?
+                  AND status = 'approved'
+                  AND template_id IN (
+                      SELECT id FROM prize_templates WHERE household_id = ?
+                  )
+            """, (request_id, parent["household_id"]))
+
+        if cursor.rowcount != 1:
+            abort(403)
+
+    flash(f"Request {decision}.", "success")
+    return redirect(url_for("parent_requests"))
 
 @app.route("/logout")
 def logout():

@@ -43,3 +43,32 @@ CREATE TABLE IF NOT EXISTS chore_submissions (
   FOREIGN KEY(kid_id) REFERENCES users(id),
   FOREIGN KEY(reviewed_by) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS prize_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  household_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  points_cost INTEGER NOT NULL CHECK(points_cost > 0),
+  active TEXT NOT NULL DEFAULT 'Y' CHECK(active IN ('Y','N')),
+  created_on DATETIME DEFAULT CURRENT_TIMESTAMP,
+  created_by INTEGER NOT NULL,
+  FOREIGN KEY(household_id) REFERENCES households(id),
+  FOREIGN KEY(created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS prize_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  template_id INTEGER NOT NULL,
+  kid_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'requested'
+    CHECK(status IN ('requested','approved','denied','fulfilled')),
+  note TEXT,
+  points_cost INTEGER NOT NULL,
+  requested_on DATETIME DEFAULT CURRENT_TIMESTAMP,
+  reviewed_on DATETIME,
+  reviewed_by INTEGER,
+  fulfilled_on DATETIME,
+  FOREIGN KEY(template_id) REFERENCES prize_templates(id),
+  FOREIGN KEY(kid_id) REFERENCES users(id),
+  FOREIGN KEY(reviewed_by) REFERENCES users(id)
+);

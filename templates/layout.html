@@ -24,14 +24,20 @@
                     <div class="navbar-nav">
                         <a class="nav-link" href="{{ url_for('parents') }}">Dashboard</a>
                         <a class="nav-link" href="{{ url_for('create_kid') }}">Add Kid</a>
+
                         <a class="nav-link" href="{{ url_for('parents_chores') }}">Manage Chores</a>
-                        <a class="nav-link" href="{{ url_for('parent_submissions') }}">Review</a>
+                        <a class="nav-link" href="{{ url_for('parent_submissions') }}">Review Chores</a>
+
+                        <a class="nav-link" href="{{ url_for('parents_prizes') }}">Manage Prizes</a>
+                        <a class="nav-link" href="{{ url_for('parent_requests') }}">Review Prizes</a>
+
                         <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                     </div>
                 {% elif current_user["role"] == "kid" %}
                     <div class="navbar-nav">
                         <a class="nav-link active" aria-current="page" href="{{ url_for('kids') }}">Dashboard</a>
                         <a class="nav-link" href="{{ url_for('kids_chores') }}">Chores</a>
+                        <a class="nav-link" href="{{ url_for('kids_prizes') }}">Prizes</a>
                         <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                     </div>
                 {% endif %}

@@ -1,0 +1,120 @@
+{% extends "layout.html" %}
+{% block title %}Goody! | Review Prize Requests{% endblock %}
+
+{% block content %}
+
+<h3 class="mb-3">Pending Requests</h3>
+
+{% if pending|length == 0 %}
+  <div class="alert alert-info">No pending requests.</div>
+{% else %}
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Kid</th>
+          <th>Prize</th>
+          <th>Note</th>
+          <th class="text-end">Points</th>
+          <th>Status</th>
+          <th class="text-end">Requested</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in pending %}
+        <tr>
+          <td>{{ s.kid_username }}</td>
+          <td>{{ s.prize_title }}</td>
+          <td>{{ s.note or "" }}</td>
+          <td class="text-end">{{ s.points_cost }}</td>
+
+          <td>
+            {% if s.status == 'requested' %}
+              <span class="badge bg-secondary">Requested</span>
+            {% elif s.status == 'approved' %}
+              <span class="badge bg-success">Approved</span>
+            {% else %}
+              <span class="badge bg-dark">{{ s.status }}</span>
+            {% endif %}
+          </td>
+
+          <td class="text-end">{{ s.requested_on }}</td>
+
+          <td class="text-end">
+            {% if s.status == 'requested' %}
+              <form class="d-inline" method="post" action="{{ url_for('review_requests', request_id=s.id) }}">
+                <input type="hidden" name="decision" value="approved">
+                <button class="btn btn-sm btn-success" type="submit">Approve</button>
+              </form>
+
+              <form class="d-inline ms-1" method="post" action="{{ url_for('review_requests', request_id=s.id) }}">
+                <input type="hidden" name="decision" value="denied">
+                <button class="btn btn-sm btn-danger" type="submit">Deny</button>
+              </form>
+
+              <button class="btn btn-sm btn-primary ms-1" type="button" disabled>Fulfill</button>
+
+            {% elif s.status == 'approved' %}
+              <button class="btn btn-sm btn-success" type="button" disabled>Approve</button>
+              <button class="btn btn-sm btn-danger ms-1" type="button" disabled>Deny</button>
+
+              <form class="d-inline ms-1" method="post" action="{{ url_for('review_requests', request_id=s.id) }}">
+                <input type="hidden" name="decision" value="fulfilled">
+                <button class="btn btn-sm btn-primary" type="submit">Fulfill</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+<hr class="my-4">
+
+<h3 class="mb-3">Recently Reviewed (last 25)</h3>
+
+{% if reviewed|length == 0 %}
+  <div class="alert alert-secondary">No reviewed requests yet.</div>
+{% else %}
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Kid</th>
+          <th>Prize</th>
+          <th>Status</th>
+          <th class="text-end">Points</th>
+          <th class="text-end">Requested</th>
+          <th class="text-end">Reviewed/Fulfilled</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in reviewed %}
+        <tr>
+          <td>{{ s.kid_username }}</td>
+          <td>{{ s.prize_title }}</td>
+
+          <td>
+            {% if s.status == 'denied' %}
+              <span class="badge bg-danger">Denied</span>
+            {% elif s.status == 'fulfilled' %}
+              <span class="badge bg-primary">Fulfilled</span>
+            {% else %}
+              <span class="badge bg-dark">{{ s.status }}</span>
+            {% endif %}
+          </td>
+
+          <td class="text-end">{{ s.points_cost }}</td>
+          <td class="text-end">{{ s.requested_on }}</td>
+          <td class="text-end">{{ s.fulfilled_on or s.reviewed_on }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% endblock %}
