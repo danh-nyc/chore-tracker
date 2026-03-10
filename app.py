@@ -5,7 +5,7 @@ import sqlite3
 import secrets
 import string
 
-
+app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
 if not app.secret_key:
