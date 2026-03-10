@@ -1,5 +1,6 @@
 from flask import Flask, flash, redirect, render_template, request, session, url_for, abort, g
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
 import sqlite3
 import secrets
 import string
