@@ -5,9 +5,10 @@ import secrets
 import string
 
 
-app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
-app.secret_key = "beebs"
+if not app.secret_key:
+    raise RuntimeError("FLASK_SECRET_KEY is not set")
 
 def get_db_connection():
     conn = sqlite3.connect("choretracker.db")
@@ -403,12 +404,22 @@ def parents():
         """, (parent["household_id"],))
         pending_requests = cursor.fetchone()["c"]
 
+        cursor.execute("""
+            SELECT h.invite_code
+            FROM households h
+            JOIN users u ON u.household_id = h.id
+            WHERE u.id = ?
+            AND u.role = 'parent'
+        """, (parent["id"])")
+        invite = cursor.fetchone()[0]
+
     return render_template(
         "parents.html",
         parent=parent,
         kids=kids,
         pending_submissions=pending_submissions,
-        pending_requests=pending_requests
+        pending_requests=pending_requests,
+        invite=invite
     )
 
 @app.route("/parents/chores", methods=["GET", "POST"])

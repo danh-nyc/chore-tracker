@@ -6,8 +6,13 @@
 
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h1 class="h3 mb-0">Parent Dashboard</h1>
-  <div class="text-muted small">
-    Logged in as <span class="fw-semibold">{{ parent.username }}</span>
+  <div class="text-muted small text-end">
+    <div>
+      Logged in as <span class="fw-semibold">{{ parent.username }}</span>
+    </div>
+    <div>
+      Household invite code: <span class="fw-semibold">{{ invite }}</span>
+    </div>
   </div>
 </div>
 
