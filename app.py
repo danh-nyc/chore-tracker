@@ -410,7 +410,7 @@ def parents():
             JOIN users u ON u.household_id = h.id
             WHERE u.id = ?
             AND u.role = 'parent'
-        """, (parent["id"])")
+        """, (parent["id"],))
         invite = cursor.fetchone()[0]
 
     return render_template(
