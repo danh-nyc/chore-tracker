@@ -11,8 +11,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key:
     raise RuntimeError("FLASK_SECRET_KEY is not set")
 
+DATABASE_PATH = "/home/dan/data/goody/choretracker.db"
+
 def get_db_connection():
-    conn = sqlite3.connect("choretracker.db")
+    conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
