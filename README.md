@@ -2,8 +2,6 @@
 
 A simple web application that helps families manage chores and rewards for kids. 
 
-Parents can register, add kids, create chores & prize options, and review submissions.  Kids can browse available chores, submit for approval, and redeem points earned on prizes.  The app is designed to encourage responsibility and make household task management more transparent and engaging.
-
 ## Overview
 
 1. This app has two roles: Parents & Kids
