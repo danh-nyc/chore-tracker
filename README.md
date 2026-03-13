@@ -1,5 +1,7 @@
 # Goody!
 
+## Video Demo: https://youtu.be/tl_ug95L2qs
+
 A simple web application that helps families manage chores and rewards for kids. 
 
 ## Overview
